@@ -5,9 +5,9 @@
     nixpkgs.url = "github:NixOS/nixpkgs";
   };
 
-  outputs = { self, nixpkgs, mysrc ? null, ... }: let
+  outputs = { self, nixpkgs, asrc ? null, ... }: let
     pkgs = import nixpkgs { system = "x86_64-linux"; };
-    actualSrc = if mysrc != null then mysrc else ./.;
+    actualSrc = if asrc != null then asrc else ./.;
   in {
     packages.x86_64-linux.default = pkgs.stdenv.mkDerivation {
       name = "my-custom-build";
