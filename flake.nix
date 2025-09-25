@@ -1,19 +1,17 @@
-# flake.nix
 {
   description = "Flake that builds something from a src";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs";
-    # Allow passing a source as an input
-    mysrc = { type = "path"; };  # optional default
   };
 
-  outputs = { self, nixpkgs, mysrc, ... }: let
+  outputs = { self, nixpkgs, mysrc ? null, ... }: let
     pkgs = import nixpkgs { system = "x86_64-linux"; };
+    actualSrc = if mysrc != null then mysrc else ./.;
   in {
     packages.x86_64-linux.default = pkgs.stdenv.mkDerivation {
       name = "my-custom-build";
-      src = mysrc;
+      src = actualSrc;
       buildPhase = "echo Building from $src; ls $src";
       installPhase = ''
         mkdir -p $out
