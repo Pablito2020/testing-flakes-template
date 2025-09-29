@@ -1,0 +1,15 @@
+[project]
+name = "fed_project"
+version = "0.1.0"
+description = "Lorem ipsum"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.6",
+    "pytest>=8.3.4",
+    "uvicorn>=0.32.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

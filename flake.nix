@@ -1,31 +1,109 @@
 {
-  description = "Flake with optional local source override";
+  description = "Build federated projects";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs";
-    # Do NOT declare `mysrc` here
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    pyproject-nix = {
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    uv2nix = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     mysrc = {
-      url = "path:./.";    # or some default path
+      url = "path:.";    # or some default path
       flake = false;
     };
   };
 
-  outputs = { self, nixpkgs, mysrc ? null, ... }:
+  outputs =
+    {
+      nixpkgs,
+      pyproject-nix,
+      mysrc ? null,
+      uv2nix,
+      pyproject-build-systems,
+      ...
+    }@inputs:
     let
-      pkgs = import nixpkgs { system = "x86_64-linux"; };
+      inherit (nixpkgs) lib;
 
-      # If mysrc was passed, use it; otherwise default to the flake’s ./.
-      actualSrc = if mysrc != null then mysrc else ./.;
-    in {
-      packages.x86_64-linux.default = pkgs.stdenv.mkDerivation {
-        pname = "my-package";
-        version = "0.1";
-        src = actualSrc;
-        buildPhase = "echo Building from $src; ls $src";
-        installPhase = ''
-          mkdir -p $out
-          cp -r $src/* $out/
-        '';
+      # actualSrc = if mysrc != null then builtins.toPath mysrc else ./.;
+      name = "fed_project";
+
+
+      forAllSystems = lib.genAttrs lib.systems.flakeExposed;
+
+      workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = mysrc; };
+
+      overlay = workspace.mkPyprojectOverlay {
+        sourcePreference = "wheel";
       };
+
+      editableOverlay = workspace.mkEditablePyprojectOverlay {
+        root = "$REPO_ROOT";
+      };
+
+      pythonSets = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          python = pkgs.python3;
+        in
+        (pkgs.callPackage pyproject-nix.build.packages {
+          inherit python;
+        }).overrideScope
+          (
+            lib.composeManyExtensions [
+              pyproject-build-systems.overlays.wheel
+              overlay
+            ]
+          )
+      );
+
+    in
+    {
+      devShells = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          pythonSet = pythonSets.${system}.overrideScope editableOverlay;
+          virtualenv = pythonSet.mkVirtualEnv name workspace.deps.all;
+        in
+        {
+          default = pkgs.mkShell {
+            packages = [
+              virtualenv
+              pkgs.uv
+            ];
+            env = {
+              UV_NO_SYNC = "1";
+              UV_PYTHON = pythonSet.python.interpreter;
+              UV_PYTHON_DOWNLOADS = "never";
+            };
+            shellHook = ''
+              # unset PYTHONPATH
+              # export REPO_ROOT=$(git rev-parse --show-toplevel)
+              . ${virtualenv}/bin/activate
+            '';
+          };
+        }
+      );
+
+      packages = forAllSystems (system: {
+        default = pythonSets.${system}.mkVirtualEnv name workspace.deps.default;
+      });
     };
 }
