@@ -47,13 +47,13 @@
       forAllSystems = lib.genAttrs lib.systems.flakeExposed;
 
       workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = mysrc; };
-
       overlay = workspace.mkPyprojectOverlay {
         sourcePreference = "wheel";
       };
-
-      editableOverlay = workspace.mkEditablePyprojectOverlay {
-        root = "$REPO_ROOT";
+      pyprojectOverrides = final: prev: {
+        antlr4-python3-runtime = prev.antlr4-python3-runtime.overrideAttrs(old: {
+          buildInputs = (old.buildInputs or []) ++ final.resolveBuildSystem ( {setuptools = [];});
+          });
       };
 
       pythonSets = forAllSystems (
@@ -67,7 +67,8 @@
         }).overrideScope
           (
             lib.composeManyExtensions [
-              pyproject-build-systems.overlays.wheel
+              pyprojectOverrides
+              pyproject-build-systems.overlays.default
               overlay
             ]
           )
@@ -106,8 +107,10 @@
         }
       );
 
-      packages = forAllSystems (system: {
-        default = pythonSets.${system}.mkVirtualEnv name workspace.deps.default;
+      packages = forAllSystems (system: let
+        s = pythonSets.${system}.overrideScope pyprojectOverrides;
+      in{
+        default = s.mkVirtualEnv name workspace.deps.default;
       });
     };
 }
