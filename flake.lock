@@ -3,11 +3,11 @@
     "mysrc": {
       "flake": false,
       "locked": {
-        "path": ".",
+        "path": "./default",
         "type": "path"
       },
       "original": {
-        "path": ".",
+        "path": "./default",
         "type": "path"
       },
       "parent": []
