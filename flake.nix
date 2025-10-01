@@ -23,7 +23,7 @@
     };
 
     mysrc = {
-      url = "path:.";    # or some default path
+      url = "path:./default";    # or some default path
       flake = false;
     };
   };
